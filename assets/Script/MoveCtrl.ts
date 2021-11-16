@@ -12,26 +12,46 @@ import {
   CameraComponent,
   Vec2,
   TerrainCollider,
+  Vec3,
+  SkeletalAnimationComponent,
 } from "cc";
 const { ccclass, property } = _decorator;
 
+const SPEED = 10;
+const CELL_TIME = 0.016;
+
 @ccclass("MoveCtrl")
 export class MoveCtrl extends Component {
+  @property(Node)
+  node_role: Node = null!;
+
   @property({ type: CameraComponent })
   cameraCom: CameraComponent = null!;
 
   @property({ type: TerrainCollider })
   terrain: TerrainCollider = null!;
 
-  private _ray: geometry.ray = new geometry.ray();
+  @property({ type: SkeletalAnimationComponent })
+  public CocosAnim: SkeletalAnimationComponent = null;
+
+  private _touchPoint: Vec3 = null!;
+  private _ray: geometry.ray = new geometry.Ray();
   private _isRunning: boolean = false;
-  private _speed:number = 20;
+  private _speed: number = 20;
 
   start() {
-    systemEvent.on(SystemEventType.TOUCH_END, this.move, this);
+    this.setTouchPoint(this.node.position);
+    systemEvent.on(SystemEventType.TOUCH_END, this.point, this);
+    // this.CocosAnim = this.node_role.getComponent(SkeletalAnimationComponent);
   }
 
-  move(event: EventTouch, touch: Touch) {
+  setTouchPoint(point: Vec3) {
+    this._touchPoint = point;
+    console.log("touch x: ",this.fixPoint(point));
+    
+  }
+
+  point(event: EventTouch, touch: Touch) {
     const { _touches }: any = touch;
     const { _point }: any = _touches[0];
 
@@ -41,19 +61,54 @@ export class MoveCtrl extends Component {
       const r = PhysicsSystem.instance.raycastResults;
       for (let i = 0; i < r.length; i++) {
         const item = r[i];
-       if(item.collider.uuid == this.terrain.uuid){
-           this.node.setPosition(item.hitPoint);
-       }
+        //check if the raycast hit the terrain or not.
+        if (item.collider.uuid == this.terrain.uuid) {
+          this.setTouchPoint(item.hitPoint);
+          // this.CocosAnim.play('cocos_anim_run');
+        }
       }
     }
-
-
-    console.log(this.node.getWorldPosition());
-    
   }
-  // update (deltaTime: number) {
-  //     // [4]
-  // }
+
+  move(dt: number) {
+    if (this._isRunning) {
+      this.node.setPosition(
+        this.node.position.add3f(
+          this._touchPoint.x*dt,
+          0,
+          this._touchPoint.z*dt
+        )
+      );
+    } else {
+      this.node.setPosition(
+        this.node.position.add3f(
+          0,
+          0,
+          0
+        )
+      );
+    }
+  }
+
+  stop() {
+    // this._touchPoint = null;
+  }
+
+  fixPoint(point:Vec3){
+    return {x: parseFloat((Math.round(point.x * 100)/100).toFixed(1)), z: parseFloat((Math.round(point.z * 100)/100).toFixed(1))}
+  }
+
+  update(deltaTime: number) {
+    this.move(deltaTime);
+    console.log(this.fixPoint(this.node.position));
+    
+    if ((this.fixPoint(this.node.position)).x !== (this.fixPoint(this._touchPoint)).x) {
+      this._isRunning = true;
+    } else {
+      if((this.fixPoint(this.node.position)).x == (this.fixPoint(this._touchPoint)).x){
+        this._isRunning = false;}
+      }
+  }     
 }
 
 /**
